@@ -1,259 +1,270 @@
 import pygame
 import sys
-import os
 import random
 
-# Khởi tạo pygame
+# Khởi tạo Pygame
 pygame.init()
 
-# Kích thước màn hình
-WIDTH, HEIGHT = 800, 600
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption('Mario Game')
+# Kích thước cửa sổ
+SCREEN_WIDTH = 800
+SCREEN_HEIGHT = 600
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+pygame.display.set_caption("Mario Game")
 
 # Màu sắc
 WHITE = (255, 255, 255)
-BLACK = (0, 0, 0)
+GREEN = (0, 255, 0)
+RED = (255, 0, 0)
+BLUE = (0, 0, 255)  # Màu xanh cho thanh nền
 
-# Tải hình ảnh nền và điều chỉnh kích thước
-background = pygame.image.load('assets/background.jpg').convert()
-background = pygame.transform.scale(background, (WIDTH, HEIGHT))
+# Tải hình ảnh và thay đổi kích thước
+def load_and_scale_image(path, size):    
+    image = pygame.image.load(path)
+    return pygame.transform.scale(image, size)
 
-# Tải hình ảnh nhân vật Mario
-mario_image = pygame.image.load('assets/mario.gif').convert_alpha()
-mario_image = pygame.transform.scale(mario_image, (50, 50))  # Kích thước ví dụ: 50x50
+# Tải hình ảnh nền
+background_image = load_and_scale_image("assets/background.png", (SCREEN_WIDTH, SCREEN_HEIGHT))
 
-# Tải hình ảnh kẻ thù và vật phẩm
-enemy_image = pygame.image.load('assets/enemy.png').convert_alpha()
-enemy_image = pygame.transform.scale(enemy_image, (50, 50))  # Kích thước ví dụ: 50x50
+# Tải hình ảnh nền tảng
+platform_image = load_and_scale_image("assets/platform.png", (200, 100))  # Kích thước hình ảnh nền tảng
 
-# Tải hình ảnh mặt đất và hộp vật phẩm
-ground_image = pygame.image.load('assets/ground.png').convert_alpha()
-ground_image = pygame.transform.scale(ground_image, (WIDTH, 50))  # Điều chỉnh kích thước mặt đất nếu cần
-box_image = pygame.image.load('assets/box.png').convert_alpha()
-box_image = pygame.transform.scale(box_image, (50, 50))  # Điều chỉnh kích thước hộp vật phẩm nếu cần
+# Kích thước ban đầu và kích thước khi nhận power-up
+initial_size = (40, 40)  # Thay đổi kích thước Mario thành hình vuông 
+power_up_size = (60, 60)  # Kích thước hình vuông khi nhận power-up
 
-# Tải hình ảnh vật phẩm ngẫu nhiên
-gold_image = pygame.image.load('assets/gold.png').convert_alpha()
-gold_image = pygame.transform.scale(gold_image, (30, 30))  # Kích thước ví dụ: 30x30
-mushroom_image = pygame.image.load('assets/mushroom.png').convert_alpha()
-mushroom_image = pygame.transform.scale(mushroom_image, (30, 30))  # Kích thước ví dụ: 30x30
+mario_image = load_and_scale_image("assets/mario.png", initial_size)  # Thay đổi hình ảnh thành mario.png
+coin_image = load_and_scale_image("assets/coin.png", (20, 20))
+enemy_image = load_and_scale_image("assets/enemy.png", (40, 40))
+lucky_box_image = load_and_scale_image("assets/lucky_box.png", (40, 40))
+power_up_image = load_and_scale_image("assets/power_up.png", (40, 40))  # Hình ảnh power-up
+extra_life_image = load_and_scale_image("assets/extra_life.png", (40, 40))  # Hình ảnh extra life
 
-# Kiểm tra đường dẫn tệp âm thanh
-audio_file = 'assets/background_music.mp3'
-print(f"Đường dẫn âm thanh: {os.path.abspath(audio_file)}")
+# Tải hình ảnh cổng chiến thắng và thay đổi kích thước
+winning_gate_image = load_and_scale_image("assets/winning_gate.png", (100, 100))  # Kích thước của cổng chiến thắng
 
-# Tải âm thanh
-try:
-    pygame.mixer.music.load(audio_file)
-    pygame.mixer.music.play(-1)  # Phát nhạc nền liên tục
-except pygame.error as e:
-    print(f"Lỗi khi tải âm thanh: {e}")
+mario_rect = mario_image.get_rect()
+mario_rect.x = 50
+mario_rect.y = SCREEN_HEIGHT - mario_rect.height - 50
 
-jump_sound = pygame.mixer.Sound('assets/jump_sound.wav')
+# Các biến tốc độ di chuyển
+speed_x = 0
+speed_y = 0
+gravity = 0.5
+is_jumping = False
 
-# Tạo đồng hồ để kiểm soát tốc độ khung hình
-clock = pygame.time.Clock()
+# Các nền tảng với hình ảnh nền tảng
+platforms = [pygame.Rect(0, SCREEN_HEIGHT - 50, SCREEN_WIDTH, 50),
+             pygame.Rect(200, SCREEN_HEIGHT - 150, 200, 20),
+             pygame.Rect(500, SCREEN_HEIGHT - 300, 200, 20)]
 
-# Tạo lớp Mario với hình ảnh mới
-class Mario(pygame.sprite.Sprite):
-    def __init__(self):
-        super().__init__()
-        self.image = mario_image
-        self.rect = self.image.get_rect()
-        self.rect.centerx = WIDTH // 2
-        self.rect.bottom = ground.rect.top  # Đặt Mario đứng trên mặt đất
-        self.velocity = 5
-        self.gravity = 0.5
-        self.is_jumping = False
-        self.jump_speed = -10
-        self.y_velocity = 0
-        self.on_ground = True  # Trạng thái để kiểm tra Mario có đứng trên mặt đất không
-        self.grown = False  # Trạng thái để kiểm tra Mario đã to lên chưa
+# Khởi tạo danh sách kẻ thù với tốc độ di chuyển
+enemies = []
+enemy_speeds = []
+for _ in range(10):
+    enemy = pygame.Rect(random.randint(100, 700), SCREEN_HEIGHT - 100, 40, 40)
+    speed = random.choice([-2, 2])
+    enemies.append(enemy)
+    enemy_speeds.append(speed)
 
-    def update(self):
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_LEFT]:
-            self.rect.x -= self.velocity
-        if keys[pygame.K_RIGHT]:
-            self.rect.x += self.velocity
-        if keys[pygame.K_UP] and not self.is_jumping and self.on_ground:
-            self.is_jumping = True
-            self.y_velocity = self.jump_speed
-            jump_sound.play()  # Phát âm thanh khi nhảy
+# Coin
+coins = [pygame.Rect(random.randint(100, 700), SCREEN_HEIGHT - 200, 20, 20)]
 
-        # Cập nhật vị trí và kiểm soát nhảy
-        if self.is_jumping:
-            self.rect.y += self.y_velocity
-            self.y_velocity += self.gravity
+# Lucky Boxes
+lucky_boxes = [pygame.Rect(300, SCREEN_HEIGHT - 200, 40, 40)]
 
-        # Kiểm tra va chạm với mặt đất
-        if self.rect.bottom >= ground.rect.top:
-            self.rect.bottom = ground.rect.top
-            self.is_jumping = False
-            self.y_velocity = 0
-            self.on_ground = True
-        else:
-            self.on_ground = False
+# Vật phẩm ngẫu nhiên
+def spawn_random_item(x, y):
+    items = ['coin', 'power_up', 'extra_life']
+    item = random.choice(items)
+    if item == 'coin':
+        return pygame.Rect(x, y, 20, 20), coin_image
+    elif item == 'power_up':
+        return pygame.Rect(x, y, 40, 40), power_up_image
+    elif item == 'extra_life':
+        return pygame.Rect(x, y, 40, 40), extra_life_image
 
-        # Kiểm tra va chạm với kẻ thù
-        if pygame.sprite.collide_rect(self, enemy):
-            print("Va chạm với kẻ thù!")
+# Điểm số và mạng sống
+score = 0
+lives = 3
+items = []
 
-        # Đảm bảo Mario không ra ngoài màn hình
-        if self.rect.left < 0:
-            self.rect.left = 0
-        if self.rect.right > WIDTH:
-            self.rect.right = WIDTH
-        if self.rect.top < 0:
-            self.rect.top = 0
+# Điểm mục tiêu để chiến thắng
+winning_score = 10
 
-    def grow(self):
-        if not self.grown:
-            new_size = (self.rect.width + 10, self.rect.height + 10)  # Tăng kích thước thêm 10px
-            self.image = pygame.transform.scale(mario_image, new_size)
-            self.rect = self.image.get_rect(center=self.rect.center)
-            self.grown = True  # Đặt trạng thái đã to lên
+# Thêm biến để kiểm soát trạng thái power-up
+power_up_active = False
+power_up_duration = 0
+original_mario_size = initial_size
 
-# Tạo lớp Kẻ thù
-class Enemy(pygame.sprite.Sprite):
-    def __init__(self):
-        super().__init__()
-        self.image = enemy_image
-        self.rect = self.image.get_rect()
-        self.rect.x = WIDTH // 4
-        self.rect.y = HEIGHT - 200  # Đặt kẻ thù lên cao hơn mặt đất
-        self.speed = 3  # Tốc độ di chuyển
-        self.direction = 1  # 1: Phải, -1: Trái
-        self.move_range = 100  # Khoảng cách di chuyển
+# Tạo cổng chiến thắng ở vị trí trên thanh màu xanh
+winning_gate_rect = pygame.Rect(SCREEN_WIDTH - 100, SCREEN_HEIGHT - 200, 100, 50)  # Vị trí của cổng chiến thắng
 
-    def update(self):
-        # Di chuyển kẻ thù trong khoảng cách nhất định
-        self.rect.x += self.speed * self.direction
-        
-        # Nếu kẻ thù đạt đến cuối khoảng cách di chuyển, thay đổi hướng
-        if self.rect.x <= 0 or self.rect.x >= WIDTH - self.rect.width:
-            self.direction *= -1
+# Thay đổi màu sắc cổng chiến thắng theo chu kỳ thời gian
+gate_color = RED
+gate_timer = 0
+gate_flash_duration = 500  # Thời gian nhấp nháy (tính bằng khung hình)
 
-# Tạo lớp Hộp vật phẩm
-class Box(pygame.sprite.Sprite):
-    def __init__(self):
-        super().__init__()
-        self.image = box_image
-        self.rect = self.image.get_rect()
-        self.rect.x = WIDTH // 2 - 25
-        self.rect.y = HEIGHT - 200  # Đặt hộp vật phẩm trên mặt đất
-
-    def reveal_item(self):
-        # Chọn ngẫu nhiên vàng (70%) hoặc nấm (30%)
-        item_type = random.choices(
-            ['gold', 'mushroom'], 
-            weights=[0.7, 0.3], 
-            k=1
-        )[0]
-        
-        if item_type == 'gold':
-            return Gold(self.rect.x, self.rect.y)  # Đặt vàng xuất hiện phía trên hộp
-        else:
-            return Mushroom(self.rect.x, self.rect.y)  # Đặt nấm xuất hiện phía trên hộp
-
-# Tạo lớp Vàng
-class Gold(pygame.sprite.Sprite):
-    def __init__(self, x, y):
-        super().__init__()
-        self.image = gold_image
-        self.rect = self.image.get_rect()
-        self.rect.x = x
-        self.rect.y = y
-        self.fall_speed = 5  # Tốc độ rơi của vàng
-
-    def update(self):
-        # Vàng sẽ rơi xuống đất
-        if self.rect.bottom < ground.rect.top:
-            self.rect.y += self.fall_speed
-        else:
-            self.rect.bottom = ground.rect.top  # Đặt vàng trên mặt đất
-
-# Tạo lớp Nấm
-class Mushroom(pygame.sprite.Sprite):
-    def __init__(self, x, y):
-        super().__init__()
-        self.image = mushroom_image
-        self.rect = self.image.get_rect()
-        self.rect.x = x
-        self.rect.y = y
-        self.fall_speed = 5  # Tốc độ rơi của nấm
-
-    def update(self):
-        # Nấm sẽ rơi xuống đất
-        if self.rect.bottom < ground.rect.top:
-            self.rect.y += self.fall_speed
-        else:
-            self.rect.bottom = ground.rect.top  # Đặt nấm trên mặt đất
-
-# Tạo lớp Đất
-class Ground(pygame.sprite.Sprite):
-    def __init__(self):
-        super().__init__()
-        self.image = ground_image
-        self.rect = self.image.get_rect()
-        self.rect.x = 0
-        self.rect.y = HEIGHT - 50  # Đặt mặt đất ở dưới cùng của màn hình
-
-# Tạo các đối tượng
-ground = Ground()
-mario = Mario()
-enemy = Enemy()
-box = Box()
-
-# Tạo các nhóm sprite
-all_sprites = pygame.sprite.Group()
-all_sprites.add(mario, enemy, box, ground)
-
-items = pygame.sprite.Group()
-
-# Biến số lượng vàng
-gold_count = 0
-
-# Vòng lặp chính của trò chơi
+# Vòng lặp chính
 running = True
 while running:
+    # Vẽ nền lên màn hình
+    screen.blit(background_image, (0, 0))
+
+    # Xử lý các sự kiện
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
-            pygame.quit()
-            sys.exit()
+            running = False
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_LEFT:
+                speed_x = -5 if not power_up_active else -7
+            if event.key == pygame.K_RIGHT:
+                speed_x = 5 if not power_up_active else 7
+            if event.key == pygame.K_SPACE and not is_jumping:
+                speed_y = -10 if not power_up_active else -12
+                is_jumping = True
+        if event.type == pygame.KEYUP:
+            if event.key == pygame.K_LEFT or event.key == pygame.K_RIGHT:
+                speed_x = 0
 
-    # Cập nhật tất cả các đối tượng
-    all_sprites.update()
-    items.update()
+    # Áp dụng trọng lực
+    speed_y += gravity
+    mario_rect.x += speed_x
+    mario_rect.y += speed_y
 
-    # Kiểm tra va chạm với hộp vật phẩm
-    if pygame.sprite.collide_rect(mario, box):
-        item = box.reveal_item()
-        items.add(item)
-        box.kill()  # Xóa hộp vật phẩm sau khi chạm vào
+    # Kiểm tra va chạm với nền tảng
+    for platform in platforms:
+        if mario_rect.colliderect(platform) and speed_y > 0:
+            mario_rect.y = platform.top - mario_rect.height
+            speed_y = 0
+            is_jumping = False
 
-    # Kiểm tra va chạm với vật phẩm
-    collided_items = pygame.sprite.spritecollide(mario, items, True)
-    if collided_items:
-        item = collided_items[0]
-        if isinstance(item, Gold):
-            gold_count += 1
-        elif isinstance(item, Mushroom):
-            mario.grow()
+    # Đảm bảo Mario không rơi ra ngoài màn hình
+    if mario_rect.y >= SCREEN_HEIGHT - mario_rect.height - 50:
+        mario_rect.y = SCREEN_HEIGHT - mario_rect.height - 50
+        speed_y = 0
+        is_jumping = False
 
-    # Vẽ hình nền và tất cả các đối tượng
-    screen.blit(background, (0, 0))
-    all_sprites.draw(screen)
-    items.draw(screen)
+    # Cập nhật và vẽ nền tảng
+    for platform in platforms:
+        screen.blit(platform_image, platform.topleft)  # Vẽ nền tảng bằng hình ảnh
 
-    # Hiển thị số lượng vàng ở góc phải
+    # Thay đổi màu sắc của cổng chiến thắng
+    gate_timer += 1
+    if gate_timer >= gate_flash_duration:
+        gate_color = RED if gate_color == (255, 0, 0) else (255, 0, 0)
+        gate_timer = 0
+    
+    # Cập nhật và vẽ cổng chiến thắng
+    screen.blit(winning_gate_image, winning_gate_rect.topleft)
+    # Kiểm tra va chạm giữa Mario và cổng chiến thắng
+    if mario_rect.colliderect(winning_gate_rect) and score >= winning_score:
+        font = pygame.font.SysFont(None, 72)
+        win_text = font.render("You Win!", True, (0, 255, 0))
+        screen.blit(win_text, (SCREEN_WIDTH // 2 - win_text.get_width() // 2, SCREEN_HEIGHT // 2 - win_text.get_height() // 2))
+        pygame.display.flip()
+        pygame.time.wait(2000)  # Chờ 2 giây để người chơi thấy thông báo chiến thắng
+        running = False
+
+    # Cập nhật và vẽ kẻ thù
+    for i in range(len(enemies)):
+        enemy = enemies[i]
+        speed = enemy_speeds[i]
+        screen.blit(enemy_image, enemy.topleft)
+        
+        # Di chuyển kẻ thù ngẫu nhiên
+        enemy.x += speed
+        # Đổi hướng khi chạm vào các cạnh màn hình hoặc nền tảng
+        if enemy.left < 0 or enemy.right > SCREEN_WIDTH:
+            enemy_speeds[i] *= -1
+        # Kiểm tra va chạm giữa Mario và kẻ thù
+        if mario_rect.colliderect(enemy):
+            if is_jumping and mario_rect.bottom <= enemy.top + 10:
+                # Mario nhảy vào kẻ thù từ trên cao
+                enemies.pop(i)
+                enemy_speeds.pop(i)
+                score += 1  # Thêm điểm khi tiêu diệt kẻ thù
+                speed_y = -10  # Tạo hiệu ứng khi nhảy lên
+                print("Enemy Defeated!")
+                break  # Để tránh lỗi chỉ số sau khi loại bỏ kẻ thù
+            else:
+                # Kẻ thù chạm vào Mario
+                lives -= 1
+                if lives <= 0:
+                    print("Game Over")
+                    pygame.quit()
+                    sys.exit()
+                else:
+                    # Đặt Mario về vị trí bắt đầu hoặc thực hiện hành động khác
+                    mario_rect.x = 50
+                    mario_rect.y = SCREEN_HEIGHT - mario_rect.height - 50
+                    speed_x = 0
+                    speed_y = 0
+                    is_jumping = False
+                break  # Để tránh lỗi chỉ số sau khi loại bỏ kẻ thù
+
+    # Cập nhật và vẽ đồng xu
+    for coin in coins:
+        screen.blit(coin_image, coin.topleft)
+        # Kiểm tra va chạm giữa Mario và đồng xu
+        if mario_rect.colliderect(coin):
+            coins.remove(coin)
+            score += 1
+
+    # Cập nhật và vẽ hộp may mắn
+    new_items = []  # Danh sách tạm thời để lưu các vật phẩm mới
+    for box in lucky_boxes:
+        screen.blit(lucky_box_image, box.topleft)
+        # Kiểm tra va chạm giữa Mario và hộp may mắn
+        if mario_rect.colliderect(box) and is_jumping and mario_rect.bottom <= box.top + 10:
+            lucky_boxes.remove(box)
+            item_rect, item_image = spawn_random_item(box.x, box.y - 40)
+            new_items.append((item_rect, item_image))
+            print("Lucky Box Hit!")
+
+    # Thêm các vật phẩm mới vào danh sách `items`
+    items.extend(new_items)
+
+    # Cập nhật và vẽ các vật phẩm
+    for item_rect, item_image in items:
+        screen.blit(item_image, item_rect.topleft)
+        # Kiểm tra va chạm giữa Mario và vật phẩm
+        if mario_rect.colliderect(item_rect):
+            items.remove((item_rect, item_image))
+            if item_image == coin_image:
+                score += 1
+            elif item_image == power_up_image:
+                power_up_active = True
+                power_up_duration = 500  # Thời gian hoạt động của power-up (ví dụ: 500 khung hình)
+                original_mario_size = mario_image.get_size()  # Lưu kích thước gốc
+                mario_image = load_and_scale_image("assets/mario.png", power_up_size)  # Thay đổi kích thước
+                mario_rect = mario_image.get_rect(topleft=mario_rect.topleft)  # Cập nhật rect
+                print("Power-up Activated!")
+            elif item_image == extra_life_image:
+                lives += 1
+                print("Extra Life!")
+
+    # Xử lý thời gian hoạt động của power-up
+    if power_up_active:
+        power_up_duration -= 1
+        if power_up_duration <= 0:
+            power_up_active = False
+            mario_image = load_and_scale_image("assets/mario.png", original_mario_size)  # Khôi phục kích thước
+            mario_rect = mario_image.get_rect(topleft=mario_rect.topleft)  # Cập nhật rect
+            print("Power-up Ended")
+
+    # Vẽ Mario lên màn hình
+    screen.blit(mario_image, mario_rect)
+
+    # Hiển thị điểm số và mạng sống
     font = pygame.font.SysFont(None, 36)
-    gold_text = font.render(f'Gold: {gold_count}', True, BLACK)
-    screen.blit(gold_text, (WIDTH - 150, 10))
+    score_text = font.render(f"Score: {score}", True, (0, 0, 0))
+    lives_text = font.render(f"Lives: {lives}", True, (0, 0, 0))
+    screen.blit(score_text, (10, 10)) 
+    screen.blit(lives_text, (10, 50))
 
     # Cập nhật màn hình
     pygame.display.flip()
+    pygame.time.Clock().tick(60)
 
-    # Điều chỉnh tốc độ khung hình
-    clock.tick(30)
+pygame.quit()
+sys.exit()
